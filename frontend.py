@@ -125,10 +125,14 @@ st.markdown("""
     }
     
     .confidence-badge {
-        padding: 0.5rem 1rem;
-        border-radius: 2rem;
+        background: #eef2ff;
+        color: #4f46e5;
+        padding: 0.4rem 0.8rem;
+        border-radius: 1rem;
         font-weight: bold;
-        font-size: 1rem;
+        font-size: 0.85rem;
+        border: 1px solid #c7d2fe;
+        display: inline-block;
     }
     
     .result-text {
@@ -137,8 +141,9 @@ st.markdown("""
         border-radius: 0.5rem;
         font-style: italic;
         color: #333;
-        border-left: 3px solid #667eea;
+        border-left: 4px solid #667eea;
         margin-top: 1rem;
+        margin-left: 3.5rem; /* Indent to align with content, not rank circle */
     }
     
     .sidebar-info {
@@ -186,6 +191,25 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# ======================================================
+# MOVIE-LINK MAPPING
+# ======================================================
+MOVIE_MAP = {
+    "Adolescence S01E03.srt": "https://www.netflix.com/watch/81763206?trackId=284616272&tctx=0%2C0%2C5189220c-1a36-4bb4-bad9-68d0241a026d%2C5189220c-1a36-4bb4-bad9-68d0241a026d%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vYWRvbGUvMC8wIiwibG9jYWxTZWN0aW9uSWQiOiIyIn0%3D%2C%2C%2C%2C%2C81756069%2CVideo%3A81763206%2CdetailsPageEpisodePlayButton",
+    "Article 15.srt": "https://www.netflix.com/watch/81154455?trackId=284616272&tctx=0%2C0%2Ce039913c-2632-4b96-8bb1-c661b384ca3d%2Ce039913c-2632-4b96-8bb1-c661b384ca3d%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vYXJ0aWNsZSAxNS8wLzAiLCJsb2NhbFNlY3Rpb25JZCI6IjIifQ%3D%3D%2C%2C%2C%2CtitlesResults%2C81154455%2CVideo%3A81154455%2CminiDpPlayButton",
+    "Breaking Bad S05E14.srt": "https://www.netflix.com/watch/70236426?trackId=284616272&tctx=0%2C0%2Ccadf9c5a-e25b-424b-9251-8707d8e50d5e%2Ccadf9c5a-e25b-424b-9251-8707d8e50d5e%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vYnJlYWtpbmcgYmFkLzAvMCIsImxvY2FsU2VjdGlvbklkIjoiMiJ9%2C%2C%2C%2CtitlesResults%2C70143836%2CVideo%3A70236426%2CdetailsPageEpisodePlayButton",
+    "Gangubai.srt": "https://www.netflix.com/watch/81280352?trackId=14277281&tctx=-97%2C-97%2C%2C%2C%2C%2C%2C%2C%2CVideo%3A81280352%2CdetailsPagePlayButton",
+    "Hi.Nanna.srt": "https://www.netflix.com/watch/81682028?trackId=284616272&tctx=0%2C0%2C30bb384c-bdec-4ae3-abe4-97c6850a5e36%2C30bb384c-bdec-4ae3-abe4-97c6850a5e36%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vaGkgbmFuLzAvMCIsImxvY2FsU2VjdGlvbklkIjoiMiJ9%2C%2C%2C%2CtitlesResults%2C81682028%2CVideo%3A81682028%2CminiDpPlayButton",
+    "Im.Thinking.of.Ending.Things.srt": "https://www.netflix.com/watch/80211559?trackId=284616272&tctx=0%2C0%2Ccee44524-3a71-47a4-9d83-9eeb54c11088%2Ccee44524-3a71-47a4-9d83-9eeb54c11088%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vaW0gdGhpbmtpbi8wLzAiLCJsb2NhbFNlY3Rpb25JZCI6IjIifQ%3D%3D%2C%2C%2C%2CtitlesResults%2C80211559%2CVideo%3A80211559%2CminiDpPlayButton",
+    "Jurassic.World.srt": "https://www.netflix.com/watch/80029196?trackId=284616272&tctx=0%2C1%2C6dd8babc-0151-466e-b8f5-c0ca56dd1bc6%2C6dd8babc-0151-466e-b8f5-c0ca56dd1bc6%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vanVyYXNzaWMgd29ybGQgMjAxNS8wLzAiLCJsb2NhbFNlY3Rpb25JZCI6IjIifQ%3D%3D%2C%2C%2C%2CtitlesResults%2C80029196%2CVideo%3A80029196%2CminiDpPlayButton",
+    "Kumbalangi Nights.srt": "https://www.primevideo.com/detail/0HBV5G7X1PJ16OYMD66SJO0AVC/ref=atv_sr_fle_c_sr782405_pvsearchresults_1_1&autoplay=1",
+    "Marriage.Story.srt": "https://www.netflix.com/watch/80223779?trackId=284616272&tctx=0%2C0%2C0617bcc2-b307-476f-8ebe-08e094af1bdc%2C0617bcc2-b307-476f-8ebe-08e094af1bdc%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vbWFycmlhZ2UvMC8wIiwibG9jYWxTZWN0aW9uSWQiOiIyIn0%3D%2C%2C%2C%2CtitlesResults%2C80223779%2CVideo%3A80223779%2CminiDpPlayButton",
+    "Rocky Aur Rani Ki Prem Kahaani.srt": "https://www.primevideo.com/detail/0I6U0N56BVTVGY24EM2FARBNIC/ref=atv_sr_fle_c_sr9fee6d_pvsearchresults_1_1&autoplay=1",  # Example ID provided
+    "Shutter.Island.srt": "https://www.netflix.com/watch/70095139?trackId=284616272&tctx=0%2C0%2Cd4aa62b6-e545-4f6b-99a2-cfe023c78577%2Cd4aa62b6-e545-4f6b-99a2-cfe023c78577%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vc2h1dHQvMC8wIiwibG9jYWxTZWN0aW9uSWQiOiIyIn0%3D%2C%2C%2C%2CtitlesResults%2C70095139%2CVideo%3A70095139%2CminiDpPlayButton",
+    "Shyam.Singha.Roy.srt": "https://www.netflix.com/watch/81486768?trackId=284616272&tctx=0%2C0%2C59a96b77-8e57-4036-a046-a19d9ce3a8de%2C59a96b77-8e57-4036-a046-a19d9ce3a8de%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vc2h5YS8wLzAiLCJsb2NhbFNlY3Rpb25JZCI6IjIifQ%3D%3D%2C%2C%2C%2CtitlesResults%2C81486768%2CVideo%3A81486768%2CminiDpPlayButton",
+    "The.Girl.on.the.Train.srt": "https://www.netflix.com/watch/81144153?trackId=284616272&tctx=0%2C1%2Cac53b11f-233c-4b9e-8746-6e957ca7fb09%2Cac53b11f-233c-4b9e-8746-6e957ca7fb09%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vdGhlIGdpcmwvMC8wIiwibG9jYWxTZWN0aW9uSWQiOiIyIn0%3D%2C%2C%2C%2CtitlesResults%2C81144153%2CVideo%3A81144153%2CminiDpPlayButton"
+}   
 
 
 # ======================================================
@@ -258,20 +282,21 @@ def main():
         st.markdown("\n".join([f"• {q}" for q in example_queries]))
     
     # Main search area
-    col1, col2 = st.columns([4, 1])
-    
-    with col1:
-        query = st.text_input(
-            "🔎 Enter your search query",
-            placeholder="e.g., 'hesitant reaction', 'emotional dialogue', 'awkward pause'",
-            label_visibility="collapsed"
-        )
-    
-    with col2:
-        search_button = st.button("🔍 Search", use_container_width=True, type="primary")
+    with st.form(key='search_form'):
+        col1, col2 = st.columns([4, 1])
+        
+        with col1:
+            query = st.text_input(
+                "🔎 Enter your search query",
+                placeholder="e.g., 'hesitant reaction', 'emotional dialogue', 'awkward pause'",
+                label_visibility="collapsed"
+            )
+        
+        with col2:
+            submit_button = st.form_submit_button("🔍 Search", use_container_width=True, type="primary")
     
     # Display results
-    if search_button and query:
+    if submit_button and query:
         if len(query.strip()) < 3:
             st.warning("⚠️ Please enter a query with at least 3 characters.")
         else:
@@ -315,26 +340,21 @@ def main():
                 
                 # Display results
                 for idx, result in enumerate(results, 1):
-
-                    st.markdown(f"""
-                        <div class="result-card">
-                            <div class="result-header">
-                                <div style="display: flex; gap: 1rem; align-items: center;">
-                                    <div class="result-rank">#{idx}</div>
-                                    <div>
-                                        <div class="result-movie">🎬 {result['movie']}</div>
-                                        <div class="result-time">⏱️ {result['start_time']} → {result['end_time']}</div>
-                                    </div>
-                                </div>
-                                <div class="confidence-badge">
-                                    {result['confidence']}%
-                                </div>
-                            </div>
-                            <div class="result-text">
-                                💬 {result['text']}
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    movie_filename = result['movie']
+                    base_url = MOVIE_MAP.get(movie_filename)
+                    
+                    # Prepare link HTML (empty if no URL mapped)
+                    link_html = ""
+                    if base_url and "########" not in base_url:
+                        separator = "&" if "?" in base_url else "?"
+                        timestamp_url = f"{base_url}{separator}t={result['start_sec']}"
+                        
+                        # Neutral styling for all links
+                        btn_color = "#4a5568" # Neutral Slate Grey
+                        btn_text = "Watch Clip"
+                        
+                        link_html = f"""<a href="{timestamp_url}" target="_blank" style="display: inline-block; background-color: {btn_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 0.85rem; transition: opacity 0.2s;">🍿 {btn_text}</a>"""
+                    st.markdown(f"""<div class="result-card" style="display: flex; flex-direction: column;"><div class="result-header" style="display: flex; justify-content: space-between; align-items: flex-start;"><div style="display: flex; gap: 1rem; align-items: flex-start;"><div class="result-rank">#{idx}</div><div><div class="result-movie">🎬 {result['movie']}</div><div class="result-time">⏱️ {result['start_time']} → {result['end_time']}</div></div></div><div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">{link_html}<div class="confidence-badge">{result['confidence']}% Match</div></div></div><div class="result-text">💬 {result['text']}</div></div>""", unsafe_allow_html=True)
             
             else:
                 st.markdown(f"""

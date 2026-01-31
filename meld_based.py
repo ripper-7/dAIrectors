@@ -274,6 +274,7 @@ def search(query, top_k=50, min_confidence=40):
             "movie": clip["movie"],
             "start_time": clip["start_time"],
             "end_time": clip["end_time"],
+            "start_sec": int(clip["start_sec"]),
             "confidence": round(confidence, 2),
             "text": clip["text"]
         })
