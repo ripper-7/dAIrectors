@@ -392,81 +392,90 @@ def main():
         with col_up2:
             uploaded_srt = st.file_uploader("Upload Transcript (.srt)", type=['srt', 'txt'])
             
-        upload_query = st.text_input("🔎 Video Search Query", placeholder="What are you looking for in this video?")
-        
-        if st.button("🚀 Analyze & Search", type="primary"):
+        if 'search_results' not in st.session_state:
+            st.session_state.search_results = None
+        if 'video_start_time' not in st.session_state:
+            st.session_state.video_start_time = 0
+
+        with st.form(key='upload_search_form'):
+            upload_query = st.text_input("🔎 Video Search Query", placeholder="What are you looking for in this video?")
+            submit_button = st.form_submit_button("🚀 Analyze & Search", type="primary")
+
+        if submit_button:
             if uploaded_srt and upload_query:
                 with st.spinner("Processing..."):
-                    # Hardcoded Link as per User Step 226
-                    youtube_base = "https://www.youtube.com/watch?v=_HaQqZrB5lQ"
-                    
                     # 2. Process SRT
                     try:
                         stringio = uploaded_srt.getvalue().decode("utf-8")
-                        
-                        # DEBUG: Show raw content to verify format
-                        with st.expander("Debug: Raw Transcript Content"):
-                            st.code(stringio[:1000], language="text")
-
                         clips_raw = parse_srt_content(stringio, movie_name=uploaded_srt.name)
-                        
-                        # Apply context merging (Same as Mode 1 logic)
-                        # We need to import build_contextual_clips first?
-                        # It is not exported in line 5. Let's fix import first.
-                        # Assuming we fix import below.
                         clips = build_contextual_clips(clips_raw, window=1)
-                            
-                        # 3. Search
+                        
                         st.info(f"Parsed {len(clips)} clips from transcript.")
+                        
                         if len(clips) > 0:
+                            # 3. Search
                             results = search_dynamic(upload_query, clips, top_k=top_k_results, min_confidence=min_confidence)
-                            
-                            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-                            
+                            st.session_state.search_results = results
                             if results:
-                                st.markdown(f"### ✅ Found {len(results)} matches in uploaded video")
-                                
-                                for idx, result in enumerate(results, 1):
-                                    timestamp_url = f"{youtube_base}&t={result['start_sec']}"
-                                    
-                                    # Create Link Button
-                                    link_html = f"""<a href="{timestamp_url}" target="_blank" style="display: inline-block; background-color: #e53e3e; color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; font-weight: bold; transition: opacity 0.2s;">▶️ Play on YouTube</a>"""
-                                    
-                                    st.markdown(f"""
-                                        <div class="result-card">
-                                            <div class="result-header">
-                                                <div style="display: flex; gap: 1rem; align-items: center;">
-                                                    <div class="result-rank">#{idx}</div>
-                                                    <div>
-                                                        <div class="result-movie">Timestamp: {result['start_time']}</div>
-                                                    </div>
-                                                </div>
-                                                <div style="display: flex; gap: 10px; align-items: center;">
-                                                    {link_html}
-                                                    <div class="confidence-badge">{result['confidence']}% Match</div>
-                                                </div>
-                                            </div>
-                                            <div class="result-text">
-                                                💬 {result['text']}
-                                            </div>
-                                        </div>
-                                    """, unsafe_allow_html=True)
-                            else:
-                                st.warning("No matches found in this transcript for your query.")
-                                # DEBUG: Show top raw match if any to help user
-                                if len(clips) > 0:
-                                    with st.expander("Debug: Check Raw Matches"):
-                                        # Run search with 0 confidence
-                                        raw_results = search_dynamic(upload_query, clips, top_k=3, min_confidence=0)
-                                        for r in raw_results:
-                                            st.write(f"Confidence: {r['confidence']}% - {r['text']}")
+                                st.session_state.video_start_time = results[0]['start_sec']
+                            
                         else:
                             st.error("Could not parse any clips from the SRT file. Please check formatting.")
+                            st.session_state.search_results = None
                             
                     except Exception as e:
                         st.error(f"Error parsing SRT or searching: {e}")
+                        st.session_state.search_results = None
             else:
                 st.warning("⚠️ Please upload a transcript and enter a query.")
+        
+        # Display Results from Session State
+        if st.session_state.search_results:
+            results = st.session_state.search_results
+            
+            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+            
+            # Show Top Match Player (controlled by session state)
+            st.markdown(f"### 🎬 Video Player")
+            st.video(uploaded_video, start_time=st.session_state.video_start_time, autoplay=True)
+            
+            st.markdown("---")
+            st.markdown(f"### ✅ Found Matches ({len(results)})")
+            
+            for idx, result in enumerate(results, 1):
+                # Unique key for each button
+                btn_key = f"play_{idx}_{result['start_sec']}"
+                
+                # Create a container for the result
+                with st.container():
+                    col_res_1, col_res_2 = st.columns([4, 1])
+                    
+                    with col_res_1:
+                        st.markdown(f"""
+                            <div class="result-card" style="margin: 0;">
+                                <div class="result-header">
+                                    <div style="display: flex; gap: 1rem; align-items: center;">
+                                        <div class="result-rank">#{idx}</div>
+                                        <div>
+                                            <div class="result-movie">Timestamp: {result['start_time']}</div>
+                                        </div>
+                                    </div>
+                                    <div class="confidence-badge">{result['confidence']}% Match</div>
+                                </div>
+                                <div class="result-text">
+                                    💬 {result['text']}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                    with col_res_2:
+                        st.markdown(f"**Start: {result['start_time']}**")
+                        if st.button(f"▶️ Play {result['start_sec']}s", key=btn_key):
+                            st.session_state.video_start_time = result['start_sec']
+                            st.rerun()
+
+        elif st.session_state.search_results is not None and len(st.session_state.search_results) == 0:
+             st.warning("No matches found in this transcript for your query.")
     
     # Footer
     st.markdown("""

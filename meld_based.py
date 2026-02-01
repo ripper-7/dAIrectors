@@ -30,6 +30,95 @@ def time_to_seconds(t):
 # ======================================================
     return clips
 
+
+def parse_srt_content(content, movie_name="uploaded_video"):
+    """
+    Parses SRT content string into a list of clips.
+    Robustly handles standard SRT format:
+    1
+    00:00:00,000 --> 00:00:05,000
+    Text line 1
+    Text line 2
+    
+    """
+    clips = []
+    
+    # Normalize newlines
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
+    
+    # Split by double newlines (standard SRT block separator)
+    blocks = content.strip().split("\n\n")
+    
+    for block in blocks:
+        lines = [l.strip() for l in block.split("\n") if l.strip()]
+        
+        # A valid block usually has at least 2 lines (Timestamp + Text)
+        # Often 3 (Index + Timestamp + Text)
+        if len(lines) < 2:
+            continue
+            
+        # Helper to check if a line looks like a timestamp
+        def is_timestamp(l):
+            return "-->" in l and ":" in l
+            
+        # Find timestamp line
+        time_line_idx = -1
+        for i, line in enumerate(lines):
+            if is_timestamp(line):
+                time_line_idx = i
+                break
+                
+        if time_line_idx == -1:
+            continue
+            
+        # Parse timestamp
+        time_range = lines[time_line_idx]
+        try:
+            start_str, end_str = [t.strip() for t in time_range.split("-->")]
+            # Standardize comma/dot
+            start_str = start_str.replace('.', ',')
+            end_str = end_str.replace('.', ',')
+        except ValueError:
+            continue
+            
+        # Get text (lines after timestamp)
+        text_lines = lines[time_line_idx+1:]
+        
+        # Filter out purely numeric lines (sometimes index is at bottom?) or empty
+        clean_lines = [
+            l for l in text_lines 
+            if not l.isdigit() and l
+        ]
+        
+        raw_text = " ".join(clean_lines)
+        
+        # Clean text logic (same as parse_srt)
+        # 1. Remove HTML tags
+        clean_text = re.sub(r'<[^>]+>', '', raw_text)
+        # 2. Remove hearing-impaired descriptors
+        clean_text = re.sub(r'[\(\[][^)]*[\)\]]', '', clean_text)
+        # 3. Remove speaker labels
+        clean_text = re.sub(r'^[A-Z\s]+:', '', clean_text)
+        # 4. Remove leading hyphens
+        clean_text = re.sub(r'^\s*-\s*', '', clean_text)
+        # 5. Collapse whitespace
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+        
+        if not clean_text:
+            continue
+            
+        clips.append({
+            "movie": movie_name,
+            "start_sec": time_to_seconds(start_str),
+            "end_sec": time_to_seconds(end_str),
+            "start_time": start_str,
+            "end_time": end_str,
+            "text": clean_text
+        })
+        
+    return clips
+
+
 def parse_srt(file_path):
     clips = []
 
@@ -181,6 +270,8 @@ def behavior_bonus(text):
         bonus += 0.05
     if len(words) >= 12 and t.count(",") >= 2:
         bonus += 0.04
+    if "!" in t:
+        bonus += 0.03
 
     return min(bonus, 0.25)
 
@@ -305,7 +396,7 @@ def search(query, top_k=50, min_confidence=40):
             for i, clip in enumerate(candidates):
                 score = cross_scores[i]
                 # Shifted sigmoid
-                adj_score = score + 1.5
+                adj_score = score + 3.5
                 confidence = (1 / (1 + np.exp(-adj_score))) * 100
                 bonus = behavior_bonus(clip["text"]) * 10
                 confidence += bonus
@@ -375,6 +466,81 @@ def search(query, top_k=50, min_confidence=40):
             seen_intervals[movie].append((start, end))
             
     return unique_results[:top_k]
+
+
+def search_dynamic(query, clips, top_k=10, min_confidence=40):
+    """
+    Search through a provided list of clips (dynamic/uploaded).
+    """
+    if not clips:
+        return []
+        
+    # Generate embeddings for clips on the fly
+    texts = [c["text"] for c in clips]
+    
+    # Use global model
+    clip_embeddings = model.encode(texts, normalize_embeddings=True)
+    
+    # Query embedding
+    query_emb = model.encode([query], normalize_embeddings=True)
+    
+    # Similarity (dot product)
+    # query_emb is (1, dim), clip_embeddings is (N, dim)
+    scores = np.dot(query_emb, clip_embeddings.T)[0]
+    
+    results = []
+    for i, raw_score in enumerate(scores):
+        clip = clips[i]
+        
+        # Calculate confidence
+        # Add behavior bonus if possible
+        bonus = behavior_bonus(clip["text"])
+        final_score = float(raw_score) + bonus
+        confidence = cosine_to_confidence(final_score)
+        
+        if confidence < min_confidence:
+            continue
+            
+        results.append({
+            "movie": clip["movie"],
+            "start_time": clip["start_time"],
+            "end_time": clip["end_time"],
+            "start_sec": int(clip["start_sec"]),
+            "end_sec": clip["end_sec"],
+            "confidence": round(confidence, 2),
+            "text": clip["text"]
+        })
+        
+    # Sort
+    results = sorted(results, key=lambda x: x["confidence"], reverse=True)
+    
+    # DEDUPLICATION (Remove overlapping clips)
+    unique_results = []
+    seen_intervals = {} # movie -> list of (start, end)
+    
+    for res in results:
+        movie = res["movie"]
+        start = res["start_sec"]
+        end = res["end_sec"]
+        
+        # Check against existing results for this movie
+        is_duplicate = False
+        if movie in seen_intervals:
+            for (s, e) in seen_intervals[movie]:
+                # Overlap calculation
+                # If intervals overlap significantly or are too close (within 15s)
+                if abs(start - s) < 15: # 15 second buffer
+                    is_duplicate = True
+                    break
+        
+        if not is_duplicate:
+            unique_results.append(res)
+            if movie not in seen_intervals:
+                seen_intervals[movie] = []
+            seen_intervals[movie].append((start, end))
+            
+    return unique_results[:top_k]
+
 
 
 # ======================================================
