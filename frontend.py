@@ -2,7 +2,9 @@ import streamlit as st
 import sys
 
 # Import from meld_based
-from meld_based import search, get_dataset_info
+from meld_based import search, get_dataset_info, parse_srt_content, search_dynamic, build_contextual_clips
+import tempfile
+import os
 
 # ======================================================
 # 1. Page configuration
@@ -216,6 +218,10 @@ MOVIE_MAP = {
 # 4. Main UI
 # ======================================================
 
+# ======================================================
+# 4. Main UI
+# ======================================================
+
 def main():
     # Header
     st.markdown("""
@@ -240,9 +246,9 @@ def main():
         
         min_confidence = st.slider(
             "Minimum confidence (%)",
-            min_value=20,
+            min_value=10,
             max_value=80,
-            value=40,
+            value=30,
             step=5,
             help="Filter results by minimum confidence score"
         )
@@ -281,89 +287,186 @@ def main():
         ]
         st.markdown("\n".join([f"• {q}" for q in example_queries]))
     
-    # Main search area
-    with st.form(key='search_form'):
-        col1, col2 = st.columns([4, 1])
-        
-        with col1:
-            query = st.text_input(
-                "🔎 Enter your search query",
-                placeholder="e.g., 'hesitant reaction', 'emotional dialogue', 'awkward pause'",
-                label_visibility="collapsed"
-            )
-        
-        with col2:
-            submit_button = st.form_submit_button("🔍 Search", use_container_width=True, type="primary")
+        st.markdown("\n".join([f"• {q}" for q in example_queries]))
     
-    # Display results
-    if submit_button and query:
-        if len(query.strip()) < 3:
-            st.warning("⚠️ Please enter a query with at least 3 characters.")
-        else:
-            with st.spinner("🔍 Searching through subtitles..."):
-                results = search(query, top_k=top_k_results, min_confidence=min_confidence)
+    # Tabs for modes
+    tab1, tab2 = st.tabs(["🔍 Database Search", "📤 Upload & Search"])
+    
+    # TAB 1: EXISTING DATABASE SEARCH
+    with tab1:
+        st.markdown("### Search Existing Movie Database")
+        with st.form(key='search_form'):
+            col1, col2 = st.columns([4, 1])
             
-            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+            with col1:
+                query = st.text_input(
+                    "🔎 Enter your search query",
+                    placeholder="e.g., 'hesitant reaction', 'emotional dialogue', 'awkward pause'",
+                    label_visibility="collapsed"
+                )
             
-            if results:
-                # Metrics
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <h3>Top Match</h3>
-                            <div class="value">{results[0]['confidence']}%</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                
-                with col2:
-                    avg_confidence = sum(r['confidence'] for r in results) / len(results)
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <h3>Avg Confidence</h3>
-                            <div class="value">{avg_confidence:.1f}%</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                
-                with col3:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <h3>Results Found</h3>
-                            <div class="value">{len(results)}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+            with col2:
+                submit_button = st.form_submit_button("🔍 Search", use_container_width=True, type="primary")
+        
+        # Display results
+        if submit_button and query:
+            if len(query.strip()) < 3:
+                st.warning("⚠️ Please enter a query with at least 3 characters.")
+            else:
+                with st.spinner("🔍 Searching through subtitles..."):
+                    results = search(query, top_k=top_k_results, min_confidence=min_confidence)
                 
                 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
                 
-                st.markdown("### 🎞️ Results (Ranked by Confidence)")
-                
-                # Display results
-                for idx, result in enumerate(results, 1):
-                    movie_filename = result['movie']
-                    base_url = MOVIE_MAP.get(movie_filename)
+                if results:
+                    # Metrics
+                    col1, col2, col3 = st.columns(3)
                     
-                    # Prepare link HTML (empty if no URL mapped)
-                    link_html = ""
-                    if base_url and "########" not in base_url:
-                        separator = "&" if "?" in base_url else "?"
-                        timestamp_url = f"{base_url}{separator}t={result['start_sec']}"
+                    with col1:
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <h3>Top Match</h3>
+                                <div class="value">{results[0]['confidence']}%</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        avg_confidence = sum(r['confidence'] for r in results) / len(results)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <h3>Avg Confidence</h3>
+                                <div class="value">{avg_confidence:.1f}%</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col3:
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <h3>Results Found</h3>
+                                <div class="value">{len(results)}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+                    
+                    st.markdown("### 🎞️ Results (Ranked by Confidence)")
+                    
+                    # Display results
+                    for idx, result in enumerate(results, 1):
+                        movie_filename = result['movie']
+                        base_url = MOVIE_MAP.get(movie_filename)
                         
-                        # Neutral styling for all links
-                        btn_color = "#4a5568" # Neutral Slate Grey
-                        btn_text = "Watch Clip"
-                        
-                        link_html = f"""<a href="{timestamp_url}" target="_blank" style="display: inline-block; background-color: {btn_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 0.85rem; transition: opacity 0.2s;">🍿 {btn_text}</a>"""
-                    st.markdown(f"""<div class="result-card" style="display: flex; flex-direction: column;"><div class="result-header" style="display: flex; justify-content: space-between; align-items: flex-start;"><div style="display: flex; gap: 1rem; align-items: flex-start;"><div class="result-rank">#{idx}</div><div><div class="result-movie">🎬 {result['movie']}</div><div class="result-time">⏱️ {result['start_time']} → {result['end_time']}</div></div></div><div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">{link_html}<div class="confidence-badge">{result['confidence']}% Match</div></div></div><div class="result-text">💬 {result['text']}</div></div>""", unsafe_allow_html=True)
+                        # Prepare link HTML (empty if no URL mapped)
+                        link_html = ""
+                        if base_url and "########" not in base_url:
+                            separator = "&" if "?" in base_url else "?"
+                            timestamp_url = f"{base_url}{separator}t={result['start_sec']}"
+                            
+                            # Neutral styling for all links
+                            btn_color = "#4a5568" # Neutral Slate Grey
+                            btn_text = "Watch Clip"
+                            
+                            link_html = f"""<a href="{timestamp_url}" target="_blank" style="display: inline-block; background-color: {btn_color}; color: white; padding: 0.4rem 0.8rem; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 0.85rem; transition: opacity 0.2s;">🍿 {btn_text}</a>"""
+                        st.markdown(f"""<div class="result-card" style="display: flex; flex-direction: column;"><div class="result-header" style="display: flex; justify-content: space-between; align-items: flex-start;"><div style="display: flex; gap: 1rem; align-items: flex-start;"><div class="result-rank">#{idx}</div><div><div class="result-movie">🎬 {result['movie']}</div><div class="result-time">⏱️ {result['start_time']} → {result['end_time']}</div></div></div><div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">{link_html}<div class="confidence-badge">{result['confidence']}% Match</div></div></div><div class="result-text">💬 {result['text']}</div></div>""", unsafe_allow_html=True)
+                
+                else:
+                    st.markdown(f"""
+                        <div class="no-results">
+                            <h3>❌ No Results Found</h3>
+                            <p>Try lowering the minimum confidence threshold or using different keywords.</p>
+                            <p>Current threshold: <strong>{min_confidence}%</strong></p>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+    # TAB 2: UPLOAD & SEARCH
+    with tab2:
+        st.markdown("### 📤 Upload Video & Transcript")
+        
+        st.info("ℹ️ Upload a video file and its corresponding .srt transcript to search within specific timestamps.")
+        
+        col_up1, col_up2 = st.columns(2)
+        
+        with col_up1:
+            uploaded_video = st.file_uploader("Upload Video", type=['mp4', 'mov', 'avi', 'mkv'])
             
+        with col_up2:
+            uploaded_srt = st.file_uploader("Upload Transcript (.srt)", type=['srt', 'txt'])
+            
+        upload_query = st.text_input("🔎 Video Search Query", placeholder="What are you looking for in this video?")
+        
+        if st.button("🚀 Analyze & Search", type="primary"):
+            if uploaded_srt and upload_query:
+                with st.spinner("Processing..."):
+                    # Hardcoded Link as per User Step 226
+                    youtube_base = "https://www.youtube.com/watch?v=_HaQqZrB5lQ"
+                    
+                    # 2. Process SRT
+                    try:
+                        stringio = uploaded_srt.getvalue().decode("utf-8")
+                        
+                        # DEBUG: Show raw content to verify format
+                        with st.expander("Debug: Raw Transcript Content"):
+                            st.code(stringio[:1000], language="text")
+
+                        clips_raw = parse_srt_content(stringio, movie_name=uploaded_srt.name)
+                        
+                        # Apply context merging (Same as Mode 1 logic)
+                        # We need to import build_contextual_clips first?
+                        # It is not exported in line 5. Let's fix import first.
+                        # Assuming we fix import below.
+                        clips = build_contextual_clips(clips_raw, window=1)
+                            
+                        # 3. Search
+                        st.info(f"Parsed {len(clips)} clips from transcript.")
+                        if len(clips) > 0:
+                            results = search_dynamic(upload_query, clips, top_k=top_k_results, min_confidence=min_confidence)
+                            
+                            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+                            
+                            if results:
+                                st.markdown(f"### ✅ Found {len(results)} matches in uploaded video")
+                                
+                                for idx, result in enumerate(results, 1):
+                                    timestamp_url = f"{youtube_base}&t={result['start_sec']}"
+                                    
+                                    # Create Link Button
+                                    link_html = f"""<a href="{timestamp_url}" target="_blank" style="display: inline-block; background-color: #e53e3e; color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; font-weight: bold; transition: opacity 0.2s;">▶️ Play on YouTube</a>"""
+                                    
+                                    st.markdown(f"""
+                                        <div class="result-card">
+                                            <div class="result-header">
+                                                <div style="display: flex; gap: 1rem; align-items: center;">
+                                                    <div class="result-rank">#{idx}</div>
+                                                    <div>
+                                                        <div class="result-movie">Timestamp: {result['start_time']}</div>
+                                                    </div>
+                                                </div>
+                                                <div style="display: flex; gap: 10px; align-items: center;">
+                                                    {link_html}
+                                                    <div class="confidence-badge">{result['confidence']}% Match</div>
+                                                </div>
+                                            </div>
+                                            <div class="result-text">
+                                                💬 {result['text']}
+                                            </div>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                st.warning("No matches found in this transcript for your query.")
+                                # DEBUG: Show top raw match if any to help user
+                                if len(clips) > 0:
+                                    with st.expander("Debug: Check Raw Matches"):
+                                        # Run search with 0 confidence
+                                        raw_results = search_dynamic(upload_query, clips, top_k=3, min_confidence=0)
+                                        for r in raw_results:
+                                            st.write(f"Confidence: {r['confidence']}% - {r['text']}")
+                        else:
+                            st.error("Could not parse any clips from the SRT file. Please check formatting.")
+                            
+                    except Exception as e:
+                        st.error(f"Error parsing SRT or searching: {e}")
             else:
-                st.markdown(f"""
-                    <div class="no-results">
-                        <h3>❌ No Results Found</h3>
-                        <p>Try lowering the minimum confidence threshold or using different keywords.</p>
-                        <p>Current threshold: <strong>{min_confidence}%</strong></p>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.warning("⚠️ Please upload a transcript and enter a query.")
     
     # Footer
     st.markdown("""
