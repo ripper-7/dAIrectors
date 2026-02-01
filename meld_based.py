@@ -1,33 +1,21 @@
-# ======================================================
-# 0. CRASH FIXES (MUST BE AT VERY TOP)
-# ======================================================
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import torch
 torch.set_num_threads(1)
 
-# ======================================================
-# 1. Imports
-# ======================================================
 import re
 import faiss
 import pickle
 import numpy as np
 from sentence_transformers import SentenceTransformer, CrossEncoder
 
-# ======================================================
-# 2. Timestamp conversion
-# ======================================================
 def time_to_seconds(t):
     h, m, rest = t.split(":")
     s, ms = rest.split(",")
     return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
 
 
-# ======================================================
-# 3. Parse SRT file (robust)
-# ======================================================
     return clips
 
 
@@ -43,25 +31,19 @@ def parse_srt_content(content, movie_name="uploaded_video"):
     """
     clips = []
     
-    # Normalize newlines
     content = content.replace("\r\n", "\n").replace("\r", "\n")
     
-    # Split by double newlines (standard SRT block separator)
     blocks = content.strip().split("\n\n")
     
     for block in blocks:
         lines = [l.strip() for l in block.split("\n") if l.strip()]
         
-        # A valid block usually has at least 2 lines (Timestamp + Text)
-        # Often 3 (Index + Timestamp + Text)
         if len(lines) < 2:
             continue
             
-        # Helper to check if a line looks like a timestamp
         def is_timestamp(l):
             return "-->" in l and ":" in l
             
-        # Find timestamp line
         time_line_idx = -1
         for i, line in enumerate(lines):
             if is_timestamp(line):
@@ -71,20 +53,16 @@ def parse_srt_content(content, movie_name="uploaded_video"):
         if time_line_idx == -1:
             continue
             
-        # Parse timestamp
         time_range = lines[time_line_idx]
         try:
             start_str, end_str = [t.strip() for t in time_range.split("-->")]
-            # Standardize comma/dot
             start_str = start_str.replace('.', ',')
             end_str = end_str.replace('.', ',')
         except ValueError:
             continue
             
-        # Get text (lines after timestamp)
         text_lines = lines[time_line_idx+1:]
         
-        # Filter out purely numeric lines (sometimes index is at bottom?) or empty
         clean_lines = [
             l for l in text_lines 
             if not l.isdigit() and l
@@ -92,16 +70,10 @@ def parse_srt_content(content, movie_name="uploaded_video"):
         
         raw_text = " ".join(clean_lines)
         
-        # Clean text logic (same as parse_srt)
-        # 1. Remove HTML tags
         clean_text = re.sub(r'<[^>]+>', '', raw_text)
-        # 2. Remove hearing-impaired descriptors
         clean_text = re.sub(r'[\(\[][^)]*[\)\]]', '', clean_text)
-        # 3. Remove speaker labels
         clean_text = re.sub(r'^[A-Z\s]+:', '', clean_text)
-        # 4. Remove leading hyphens
         clean_text = re.sub(r'^\s*-\s*', '', clean_text)
-        # 5. Collapse whitespace
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()
         
         if not clean_text:
@@ -146,16 +118,10 @@ def parse_srt(file_path):
         if not raw_text:
             continue
 
-        # Clean text for better semantic understanding
-        # 1. Remove HTML tags like <i>...</i>
         clean_text = re.sub(r'<[^>]+>', '', raw_text)
-        # 2. Remove hearing-impaired descriptors like (MUSIC), [APPLAUSE]
         clean_text = re.sub(r'[\(\[][^)]*[\)\]]', '', clean_text)
-        # 3. Remove speaker labels like "JOHN:"
         clean_text = re.sub(r'^[A-Z\s]+:', '', clean_text)
-        # 4. Remove leading hyphens
         clean_text = re.sub(r'^\s*-\s*', '', clean_text)
-        # 5. Collapse whitespace
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
         if not clean_text:
@@ -172,9 +138,6 @@ def parse_srt(file_path):
     return clips
 
 
-# ======================================================
-# 4. Load all subtitle files
-# ======================================================
 def load_all_subtitles():
     SUBTITLE_DIR = "Processed Movie Subtitles"
     raw_clips = []
@@ -188,9 +151,6 @@ def load_all_subtitles():
     return raw_clips
 
 
-# ======================================================
-# 5. Build CONTEXTUAL clips
-# ======================================================
 def build_contextual_clips(clips, window=3):
     """
     Groups subtitles into larger context windows.
@@ -219,9 +179,6 @@ def build_contextual_clips(clips, window=3):
     return contextual
 
 
-# ======================================================
-# 6. Behavioral bonus
-# ======================================================
 def behavior_bonus(text):
     bonus = 0.0
     t = text.strip()
@@ -276,19 +233,10 @@ def behavior_bonus(text):
     return min(bonus, 0.25)
 
 
-# ======================================================
-# 7. Confidence conversion
-# ======================================================
 def cosine_to_confidence(score):
     return max(0.0, min(float(score), 1.0)) * 100
 
 
-# ======================================================
-# 8. Initialize model and index (GLOBAL)
-# ======================================================
-# ======================================================
-# 8. Initialize model and index (GLOBAL)
-# ======================================================
 CACHE_DIR = "cache"
 CLIPS_FILE = os.path.join(CACHE_DIR, "clips_v3.pkl") # v3 forces rebuild for cleaning/context
 INDEX_FILE = os.path.join(CACHE_DIR, "behavenet_v3.index")
@@ -296,11 +244,9 @@ INDEX_FILE = os.path.join(CACHE_DIR, "behavenet_v3.index")
 def initialize_system():
     global model, cross_model, index, clips
     
-    # 1. Load Bi-Encoder (Fast enough to load every time, ~2-5s)
     print("Loading Bi-Encoder (MPNet)...")
     model = SentenceTransformer("all-mpnet-base-v2")
 
-    # 2. Load Cross-Encoder (For Reranking)
     print("Loading Cross-Encoder (MS-MARCO)...")
     try:
         cross_model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
@@ -308,7 +254,6 @@ def initialize_system():
         print(f"⚠️ Warning: Could not load Cross-Encoder ({e}). Reranking will be disabled.")
         cross_model = None
     
-    # 3. Check Cache
     if os.path.exists(CLIPS_FILE) and os.path.exists(INDEX_FILE):
         print("Found cached data. Loading...")
         try:
@@ -321,10 +266,8 @@ def initialize_system():
         except Exception as e:
             print(f"Error loading cache: {e}. Rebuilding...")
     
-    # 4. Generate if no cache
     print("No cache found (or cache outdated). Generating embeddings with clean data & larger context...")
     
-    # Ensure cache dir exists
     if not os.path.exists(CACHE_DIR):
         os.makedirs(CACHE_DIR)
         
@@ -332,7 +275,6 @@ def initialize_system():
     clips = build_contextual_clips(raw_clips, window=3) # Increased window to 3
     print(f"Contextual clips created: {len(clips)}")
     
-    # Generate embeddings
     texts = [clip["text"] for clip in clips]
     embeddings = model.encode(
         texts,
@@ -343,12 +285,10 @@ def initialize_system():
     
     print(f"Embedding shape: {embeddings.shape}")
     
-    # Build FAISS index
     dim = embeddings.shape[1]
     index = faiss.IndexFlatIP(dim)
     index.add(np.array(embeddings))
     
-    # Save to cache
     print("Saving data to cache...")
     with open(CLIPS_FILE, "wb") as f:
         pickle.dump(clips, f)
@@ -356,30 +296,23 @@ def initialize_system():
     faiss.write_index(index, INDEX_FILE)
     print("✅ System initialized and cached!")
 
-# Run initialization
 initialize_system()
 
 
-# ======================================================
-# 9. Search function (EXPORTABLE)
-# ======================================================
 def search(query, top_k=50, min_confidence=40):
     """
     Semantic search function with Cross-Encoder Reranking and Fallback
     """
-    # 1. Retrieve Candidates (Bi-Encoder)
     candidate_k = top_k * 5 
     query_emb = model.encode([query], normalize_embeddings=True)
     scores, indices = index.search(query_emb, candidate_k)
 
     results = []
     
-    # Check if we can use Cross-Encoder
     use_rerank = True
     if cross_model is None:
         use_rerank = False
     
-    # Prepare candidates
     candidates = []
     for i, idx in enumerate(indices[0]):
         clip = clips[idx]
@@ -389,13 +322,11 @@ def search(query, top_k=50, min_confidence=40):
     
     if use_rerank and candidates:
         try:
-            # Rerank
             model_inputs = [[query, clip["text"]] for clip in candidates]
             cross_scores = cross_model.predict(model_inputs)
             
             for i, clip in enumerate(candidates):
                 score = cross_scores[i]
-                # Shifted sigmoid
                 adj_score = score + 3.5
                 confidence = (1 / (1 + np.exp(-adj_score))) * 100
                 bonus = behavior_bonus(clip["text"]) * 10
@@ -414,13 +345,12 @@ def search(query, top_k=50, min_confidence=40):
                 })
         except Exception as e:
             print(f"Reranking failed ({e}), falling back.")
-            final_results = [] # Force fallback
+            final_results = []
             
-    # FAILSAFE / FALLBACK
     if not final_results:
         print("⚠️ Reranking yielded no results (or disabled). Using Bi-Encoder.")
         for i, idx in enumerate(indices[0]):
-            if i >= top_k: break # Only take top K for fallback
+            if i >= top_k: break
             raw_score = float(scores[0][i])
             clip = clips[idx]
             conf = cosine_to_confidence(raw_score)
@@ -436,26 +366,20 @@ def search(query, top_k=50, min_confidence=40):
                 "text": clip["text"]
             })
 
-    # Sort by new confidence
     final_results = sorted(final_results, key=lambda x: x["confidence"], reverse=True)
     
-    # 6. DEDUPLICATION (Remove overlapping clips)
     unique_results = []
-    seen_intervals = {} # movie -> list of (start, end)
+    seen_intervals = {}
     
     for res in final_results:
         movie = res["movie"]
         start = res["start_sec"]
         end = res["end_sec"]
         
-        # Check against existing results for this movie
         is_duplicate = False
         if movie in seen_intervals:
             for (s, e) in seen_intervals[movie]:
-                # Overlap calculation
-                # If intervals overlap significantly or are too close (within 15s)
-                # Simple check: timestamp distance
-                if abs(start - s) < 15: # 15 second buffer
+                if abs(start - s) < 15:
                     is_duplicate = True
                     break
         
@@ -470,30 +394,23 @@ def search(query, top_k=50, min_confidence=40):
 
 def search_dynamic(query, clips, top_k=10, min_confidence=40):
     """
-    Search through a provided list of clips (dynamic/uploaded).
+    Search through a provided list of clips
     """
     if not clips:
         return []
         
-    # Generate embeddings for clips on the fly
     texts = [c["text"] for c in clips]
     
-    # Use global model
     clip_embeddings = model.encode(texts, normalize_embeddings=True)
     
-    # Query embedding
     query_emb = model.encode([query], normalize_embeddings=True)
     
-    # Similarity (dot product)
-    # query_emb is (1, dim), clip_embeddings is (N, dim)
     scores = np.dot(query_emb, clip_embeddings.T)[0]
     
     results = []
     for i, raw_score in enumerate(scores):
         clip = clips[i]
         
-        # Calculate confidence
-        # Add behavior bonus if possible
         bonus = behavior_bonus(clip["text"])
         final_score = float(raw_score) + bonus
         confidence = cosine_to_confidence(final_score)
@@ -511,25 +428,20 @@ def search_dynamic(query, clips, top_k=10, min_confidence=40):
             "text": clip["text"]
         })
         
-    # Sort
     results = sorted(results, key=lambda x: x["confidence"], reverse=True)
     
-    # DEDUPLICATION (Remove overlapping clips)
     unique_results = []
-    seen_intervals = {} # movie -> list of (start, end)
+    seen_intervals = {}
     
     for res in results:
         movie = res["movie"]
         start = res["start_sec"]
         end = res["end_sec"]
         
-        # Check against existing results for this movie
         is_duplicate = False
         if movie in seen_intervals:
             for (s, e) in seen_intervals[movie]:
-                # Overlap calculation
-                # If intervals overlap significantly or are too close (within 15s)
-                if abs(start - s) < 15: # 15 second buffer
+                if abs(start - s) < 15:
                     is_duplicate = True
                     break
         
@@ -543,9 +455,6 @@ def search_dynamic(query, clips, top_k=10, min_confidence=40):
 
 
 
-# ======================================================
-# 10. Get dataset info (EXPORTABLE)
-# ======================================================
 def get_dataset_info():
     """Get dataset statistics"""
     return {
@@ -556,9 +465,6 @@ def get_dataset_info():
     }
 
 
-# ======================================================
-# 11. Interactive CLI (for testing)
-# ======================================================
 if __name__ == "__main__":
     print("\n🎬 Semantic Footage Search Engine (CLI Mode)")
     print("Type a natural language query (or 'exit' to quit)\n")

@@ -1,14 +1,10 @@
 import streamlit as st
 import sys
 
-# Import from meld_based
 from meld_based import search, get_dataset_info, parse_srt_content, search_dynamic, build_contextual_clips
 import tempfile
 import os
 
-# ======================================================
-# 1. Page configuration
-# ======================================================
 st.set_page_config(
     page_title="🎬 dAIrectors - Semantic Footage Search",
     page_icon="🎞️",
@@ -16,9 +12,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ======================================================
-# 2. Custom CSS Styling
-# ======================================================
 st.markdown("""
     <style>
     * {
@@ -194,9 +187,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ======================================================
-# MOVIE-LINK MAPPING
-# ======================================================
 MOVIE_MAP = {
     "Adolescence S01E03.srt": "https://www.netflix.com/watch/81763206?trackId=284616272&tctx=0%2C0%2C5189220c-1a36-4bb4-bad9-68d0241a026d%2C5189220c-1a36-4bb4-bad9-68d0241a026d%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vYWRvbGUvMC8wIiwibG9jYWxTZWN0aW9uSWQiOiIyIn0%3D%2C%2C%2C%2C%2C81756069%2CVideo%3A81763206%2CdetailsPageEpisodePlayButton",
     "Article 15.srt": "https://www.netflix.com/watch/81154455?trackId=284616272&tctx=0%2C0%2Ce039913c-2632-4b96-8bb1-c661b384ca3d%2Ce039913c-2632-4b96-8bb1-c661b384ca3d%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vYXJ0aWNsZSAxNS8wLzAiLCJsb2NhbFNlY3Rpb25JZCI6IjIifQ%3D%3D%2C%2C%2C%2CtitlesResults%2C81154455%2CVideo%3A81154455%2CminiDpPlayButton",
@@ -213,17 +203,7 @@ MOVIE_MAP = {
     "The.Girl.on.the.Train.srt": "https://www.netflix.com/watch/81144153?trackId=284616272&tctx=0%2C1%2Cac53b11f-233c-4b9e-8746-6e957ca7fb09%2Cac53b11f-233c-4b9e-8746-6e957ca7fb09%7C%3DeyJwYWdlSWQiOiI5NjdlYWY1Yy1mMGZkLTQ5NDctYjdiNy1iMWJjODAzMzk5MWIvMS8vdGhlIGdpcmwvMC8wIiwibG9jYWxTZWN0aW9uSWQiOiIyIn0%3D%2C%2C%2C%2CtitlesResults%2C81144153%2CVideo%3A81144153%2CminiDpPlayButton"
 }   
 
-
-# ======================================================
-# 4. Main UI
-# ======================================================
-
-# ======================================================
-# 4. Main UI
-# ======================================================
-
 def main():
-    # Header
     st.markdown("""
         <div class="header-container">
             <h1>🎬 dAIrectors</h1>
@@ -231,7 +211,6 @@ def main():
         </div>
     """, unsafe_allow_html=True)
     
-    # Sidebar
     with st.sidebar:
         st.markdown("### ⚙️ Search Settings")
         
@@ -257,7 +236,6 @@ def main():
         
         st.markdown("### 📊 Dataset Information")
         
-        # Get dataset info
         try:
             info = get_dataset_info()
             
@@ -274,25 +252,9 @@ def main():
             
         except Exception as e:
             st.error(f"Error loading dataset info: {e}")
-        
-        st.markdown("---")
-        st.markdown("### 💡 Example Queries")
-        example_queries = [
-            "hesitant reaction",
-            "emotional dialogue",
-            "awkward pause",
-            "dramatic scene",
-            "confused character",
-            "nervous moment"
-        ]
-        st.markdown("\n".join([f"• {q}" for q in example_queries]))
     
-        st.markdown("\n".join([f"• {q}" for q in example_queries]))
-    
-    # Tabs for modes
     tab1, tab2 = st.tabs(["🔍 Database Search", "📤 Upload & Search"])
     
-    # TAB 1: EXISTING DATABASE SEARCH
     with tab1:
         st.markdown("### Search Existing Movie Database")
         with st.form(key='search_form'):
@@ -301,14 +263,13 @@ def main():
             with col1:
                 query = st.text_input(
                     "🔎 Enter your search query",
-                    placeholder="e.g., 'hesitant reaction', 'emotional dialogue', 'awkward pause'",
+                    placeholder="e.g., 'hesitant reply', 'dominant reply', 'grieving'",
                     label_visibility="collapsed"
                 )
             
             with col2:
                 submit_button = st.form_submit_button("🔍 Search", use_container_width=True, type="primary")
         
-        # Display results
         if submit_button and query:
             if len(query.strip()) < 3:
                 st.warning("⚠️ Please enter a query with at least 3 characters.")
@@ -319,7 +280,6 @@ def main():
                 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
                 
                 if results:
-                    # Metrics
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
@@ -351,18 +311,15 @@ def main():
                     
                     st.markdown("### 🎞️ Results (Ranked by Confidence)")
                     
-                    # Display results
                     for idx, result in enumerate(results, 1):
                         movie_filename = result['movie']
                         base_url = MOVIE_MAP.get(movie_filename)
                         
-                        # Prepare link HTML (empty if no URL mapped)
                         link_html = ""
                         if base_url and "########" not in base_url:
                             separator = "&" if "?" in base_url else "?"
                             timestamp_url = f"{base_url}{separator}t={result['start_sec']}"
                             
-                            # Neutral styling for all links
                             btn_color = "#4a5568" # Neutral Slate Grey
                             btn_text = "Watch Clip"
                             
@@ -378,7 +335,6 @@ def main():
                         </div>
                     """, unsafe_allow_html=True)
 
-    # TAB 2: UPLOAD & SEARCH
     with tab2:
         st.markdown("### 📤 Upload Video & Transcript")
         
@@ -404,7 +360,6 @@ def main():
         if submit_button:
             if uploaded_srt and upload_query:
                 with st.spinner("Processing..."):
-                    # 2. Process SRT
                     try:
                         stringio = uploaded_srt.getvalue().decode("utf-8")
                         clips_raw = parse_srt_content(stringio, movie_name=uploaded_srt.name)
@@ -413,7 +368,6 @@ def main():
                         st.info(f"Parsed {len(clips)} clips from transcript.")
                         
                         if len(clips) > 0:
-                            # 3. Search
                             results = search_dynamic(upload_query, clips, top_k=top_k_results, min_confidence=min_confidence)
                             st.session_state.search_results = results
                             if results:
@@ -429,30 +383,26 @@ def main():
             else:
                 st.warning("⚠️ Please upload a transcript and enter a query.")
         
-        # Display Results from Session State
         if st.session_state.search_results:
             results = st.session_state.search_results
             
             st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
             
-            # Show Top Match Player (controlled by session state)
             st.markdown(f"### 🎬 Video Player")
             st.video(uploaded_video, start_time=st.session_state.video_start_time, autoplay=True)
             
             st.markdown("---")
-            st.markdown(f"### ✅ Found Matches ({len(results)})")
+            st.markdown(f"### Found Matches ({len(results)})")
             
             for idx, result in enumerate(results, 1):
-                # Unique key for each button
                 btn_key = f"play_{idx}_{result['start_sec']}"
                 
-                # Create a container for the result
                 with st.container():
                     col_res_1, col_res_2 = st.columns([4, 1])
                     
                     with col_res_1:
                         st.markdown(f"""
-                            <div class="result-card" style="margin: 0;">
+                            <div class="result-card" style="margin-bottom: 1.5rem;">
                                 <div class="result-header">
                                     <div style="display: flex; gap: 1rem; align-items: center;">
                                         <div class="result-rank">#{idx}</div>
@@ -470,14 +420,15 @@ def main():
                         
                     with col_res_2:
                         st.markdown(f"**Start: {result['start_time']}**")
-                        if st.button(f"▶️ Play {result['start_sec']}s", key=btn_key):
+                        if st.button(f"▶️ Play {result['start_sec']}s", key=btn_key, type="primary"):
                             st.session_state.video_start_time = result['start_sec']
                             st.rerun()
+                
+                st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
 
         elif st.session_state.search_results is not None and len(st.session_state.search_results) == 0:
              st.warning("No matches found in this transcript for your query.")
     
-    # Footer
     st.markdown("""
         <div class="footer">
             <p>🎞️ dAIrectors | Semantic Footage Search Engine</p>
@@ -485,9 +436,6 @@ def main():
         </div>
     """, unsafe_allow_html=True)
 
-# ======================================================
-# 5. Run Application
-# ======================================================
 
 if __name__ == "__main__":
     main()
